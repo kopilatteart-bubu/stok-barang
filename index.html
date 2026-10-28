@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplikasi Stok Barang</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    function App() {
+      const [products, setProducts] = useState(() => {
+        const saved = localStorage.getItem('stok_products');
+        return saved ? JSON.parse(saved) : [
+          { id: 1, name: 'Kopi Arabika 250g', sku: 'KOP-001', buyPrice: 45000, sellPrice: 65000, stock: 15, minStock: 5 },
+          { id: 2, name: 'Cangkir Keramik', sku: 'CGK-002', buyPrice: 15000, sellPrice: 30000, stock: 3, minStock: 5 }
+        ];
+      });
+
+      const [transactions, setTransactions] = useState(() => {
+        const saved = localStorage.getItem('stok_transactions');
+        return saved ? JSON.parse(saved) : [];
+      });
+
+      const [activeTab, setActiveTab] = useState('dashboard');
+      const [formProduct, setFormProduct] = useState({ name: '', sku: '', buyPrice: '', sellPrice: '', stock: '', minStock: '' });
+      const [txForm, setTxForm] = useState({ productId: '', type: 'OUT', qty: '' });
+
+      useEffect(() => {
+        localStorage.setItem('stok_products', JSON.stringify(products));
+      }, [products]);
+
+      useEffect(() => {
+        localStorage.setItem('stok_transactions', JSON.stringify(transactions));
+      }, [transactions]);
+
+      const handleAddProduct = (e) => {
+        e.preventDefault();
+        if (!formProduct.name || !formProduct.sellPrice) return;
+        const newProd = {
+          id: Date.now(),
+          name: formProduct.name,
+          sku: formProduct.sku || `SKU-${Math.floor(Math.random()*1000)}`,
+          buyPrice: Number(formProduct.buyPrice) || 0,
+          sellPrice: Number(formProduct.sellPrice) || 0,
+          stock: Number(formProduct.stock) || 0,
+          minStock: Number(formProduct.minStock) || 5
+        };
+        setProducts([...products, newProd]);
+        setFormProduct({ name: '', sku: '', buyPrice: '', sellPrice: '', stock: '', minStock: '' });
+      };
+
+      const handleTransaction = (e) => {
+        e.preventDefault();
+        const prod = products.find(p => p.id === Number(txForm.productId));
+        const qty = Number(txForm.qty);
+        if (!prod || qty <= 0) return;
+
+        if (txForm.type === 'OUT' && prod.stock < qty) {
+          alert('Stok tidak cukup!');
+          return;
+        }
+
+        const newStock = txForm.type === 'IN' ? prod.stock + qty : prod.stock - qty;
+        setProducts(products.map(p => p.id === prod.id ? { ...p, stock: newStock } : p));
+
+        const profit = txForm.type === 'OUT' ? (prod.sellPrice - prod.buyPrice) * qty : 0;
+        const newTx = {
+          id: Date.now(),
+          date: new Date().toLocaleString('id-ID'),
+          productName: prod.name,
+          type: txForm.type,
+          qty,
+          total: (txForm.type === 'OUT' ? prod.sellPrice : prod.buyPrice) * qty,
+          profit
+        };
+        setTransactions([newTx, ...transactions]);
+        setTxForm({ productId: '', type: 'OUT', qty: '' });
+      };
+
+      const totalAsset = products.reduce((acc, p) => acc + (p.buyPrice * p.stock), 0);
+      const totalRevenue = transactions.filter(t => t.type === 'OUT').reduce((acc, t) => acc + t.total, 0);
+      const totalProfit = transactions.filter(t => t.type === 'OUT').reduce((acc, t) => acc + t.profit, 0);
+
+      return (
+        <div class="max-w-4xl mx-auto p-4 pb-20">
+          <header class="bg-blue-600 text-white p-4 rounded-xl shadow-md mb-6">
+            <h1 class="text-xl font-bold">Aplikasi Stok & Keuntungan</h1>
+            <p class="text-sm opacity-80">Kelola stok barang dan pantau profit dengan mudah</p>
+          </header>
+
+          <nav class="flex gap-2 mb-6 border-b pb-2 overflow-x-auto">
+            {['dashboard', 'produk', 'transaksi', 'riwayat'].map(tab => (
+              <button key={tab} 
+                onClick={() => setActiveTab(tab)}
+                class={`px-4 py-2 rounded-lg capitalize font-medium ${activeTab === tab ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}>
+                {tab}
+              </button>
+            ))}
+          </nav>
+
+          {activeTab === 'dashboard' && (
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="bg-white p-4 rounded-xl shadow-sm border">
+                <p class="text-xs text-gray-500 font-bold uppercase">Total Barang</p>
+                <p class="text-2xl font-bold text-gray-800">{products.length}</p>
+              </div>
+              <div class="bg-white p-4 rounded-xl shadow-sm border">
+                <p class="text-xs text-gray-500 font-bold uppercase">Nilai Stok (Modal)</p>
+                <p class="text-xl font-bold text-blue-600">Rp {totalAsset.toLocaleString('id-ID')}</p>
+              </div>
+              <div class="bg-white p-4 rounded-xl shadow-sm border">
+                <p class="text-xs text-gray-500 font-bold uppercase">Total Pemasukan</p>
+                <p class="text-xl font-bold text-green-600">Rp {totalRevenue.toLocaleString('id-ID')}</p>
+              </div>
+              <div class="bg-white p-4 rounded-xl shadow-sm border">
+                <p class="text-xs text-gray-500 font-bold uppercase">Total Keuntungan</p>
+                <p class="text-xl font-bold text-emerald-600">Rp {totalProfit.toLocaleString('id-ID')}</p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'produk' && (
+            <div class="space-y-6">
+              <form onSubmit={handleAddProduct} class="bg-white p-4 rounded-xl shadow-sm border grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input class="border p-2 rounded" placeholder="Nama Barang" value={formProduct.name} onChange={e => setFormProduct({...formProduct, name: e.target.value})} required />
+                <input class="border p-2 rounded" placeholder="SKU / Kode" value={formProduct.sku} onChange={e => setFormProduct({...formProduct, sku: e.target.value})} />
+                <input class="border p-2 rounded" type="number" placeholder="Harga Beli (Modal)" value={formProduct.buyPrice} onChange={e => setFormProduct({...formProduct, buyPrice: e.target.value})} />
+                <input class="border p-2 rounded" type="number" placeholder="Harga Jual" value={formProduct.sellPrice} onChange={e => setFormProduct({...formProduct, sellPrice: e.target.value})} required />
+                <input class="border p-2 rounded" type="number" placeholder="Stok Awal" value={formProduct.stock} onChange={e => setFormProduct({...formProduct, stock: e.target.value})} />
+                <button class="bg-blue-600 text-white font-bold p-2 rounded hover:bg-blue-700 md:col-span-3">Tambah Produk</button>
+              </form>
+
+              <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+                <table class="w-full text-left border-collapse text-sm">
+                  <thead class="bg-gray-50 border-b">
+                    <tr>
+                      <th class="p-3">Produk</th>
+                      <th class="p-3">Harga Beli</th>
+                      <th class="p-3">Harga Jual</th>
+                      <th class="p-3">Stok</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map(p => (
+                      <tr key={p.id} class="border-b">
+                        <td class="p-3 font-medium">{p.name} <br/><span class="text-xs text-gray-400">{p.sku}</span></td>
+                        <td class="p-3">Rp {p.buyPrice.toLocaleString('id-ID')}</td>
+                        <td class="p-3">Rp {p.sellPrice.toLocaleString('id-ID')}</td>
+                        <td class="p-3 font-bold">{p.stock}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'transaksi' && (
+            <form onSubmit={handleTransaction} class="bg-white p-4 rounded-xl shadow-sm border space-y-4 max-w-lg mx-auto">
+              <h3 class="font-bold text-lg border-b pb-2">Catat Barang Masuk / Keluar</h3>
+              <div>
+                <label class="block text-sm font-medium mb-1">Pilih Barang</label>
+                <select class="w-full border p-2 rounded" value={txForm.productId} onChange={e => setTxForm({...txForm, productId: e.target.value})} required>
+                  <option value="">-- Pilih --</option>
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name} (Stok: {p.stock})</option>)}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">Jenis Transaksi</label>
+                <select class="w-full border p-2 rounded" value={txForm.type} onChange={e => setTxForm({...txForm, type: e.target.value})}>
+                  <option value="OUT">Barang Keluar (Penjualan)</option>
+                  <option value="IN">Barang Masuk (Restok)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">Jumlah (Qty)</label>
+                <input class="w-full border p-2 rounded" type="number" min="1" value={txForm.qty} onChange={e => setTxForm({...txForm, qty: e.target.value})} required />
+              </div>
+              <button class="w-full bg-green-600 text-white font-bold p-3 rounded-lg hover:bg-green-700">Simpan Transaksi</button>
+            </form>
+          )}
+
+          {activeTab === 'riwayat' && (
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <table class="w-full text-left border-collapse text-sm">
+                <thead class="bg-gray-50 border-b">
+                  <tr>
+                    <th class="p-3">Waktu</th>
+                    <th class="p-3">Produk</th>
+                    <th class="p-3">Tipe</th>
+                    <th class="p-3">Qty</th>
+                    <th class="p-3">Total</th>
+                    <th class="p-3">Untung</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map(t => (
+                    <tr key={t.id} class="border-b">
+                      <td class="p-3 text-xs text-gray-500">{t.date}</td>
+                      <td class="p-3 font-medium">{t.productName}</td>
+                      <td class="p-3"><span class={`px-2 py-1 rounded text-xs font-bold ${t.type === 'IN' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{t.type}</span></td>
+                      <td class="p-3">{t.qty}</td>
+                      <td class="p-3">Rp {t.total.toLocaleString('id-ID')}</td>
+                      <td class="p-3 text-emerald-600 font-bold">Rp {t.profit.toLocaleString('id-ID')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
